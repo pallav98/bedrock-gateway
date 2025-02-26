@@ -1,0 +1,6 @@
+docker run -it \
+  -e DB_HOST="dev-aurora-bedrock-gateway.cluster-csnafnslan02.us-east-1.rds.amazonaws.com" \
+  -e DB_USER="bedrockadmin" \
+  -e DB_PASSWORD="your-database-password" \
+  -e DB_PORTS="5432" \
+  bedrock-gw:api-0.7-new
