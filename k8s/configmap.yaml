@@ -1,7 +1,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: db-config
+  name: bedrock-gw-config
+  namespace: bedrock-gw
 data:
-  DB_HOST: "your-rds-endpoint"
-  DB_NAME: "your-database-name"
+  DB_HOST: "dev-aurora-bedrock-gateway.cluster-csnafnslan02.us-east-1.rds.amazonaws.com"
+  DB_NAME: "bedrockgateway"
+  DB_PORT: "5432"
