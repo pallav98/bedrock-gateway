@@ -1,0 +1,3 @@
+kubectl apply -f secrets.yml
+kubectl apply -f configmap.yml
+kubectl apply -f deployment.yaml
