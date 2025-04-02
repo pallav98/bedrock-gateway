@@ -1,29 +1,28 @@
-import paramiko
-import io
-import json
+#!/bin/bash
 
-WORKSPACE_IP = "10.42.80.249"  
-USERNAME = "your-username"
-PASSWORD = "your-password"  
-PRIVATE_KEY = """-----BEGIN RSA PRIVATE KEY-----
-YOUR_PRIVATE_KEY_HERE
------END RSA PRIVATE KEY-----"""  
+# Variables
+SOURCE_USER="wsansible"
+SOURCE_IP="10.185.56.196"
+DEST_USER="wsansible"
+DEST_IP="10.42.97.252"
+LOCAL_BACKUP_DIR="$HOME/workspace_migration"
+SSH_KEY="~/.ssh/wsansible.pem"
+PASSWORD="YourPasswordHere"
 
-def lambda_handler(event, context):
-    try:
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+mkdir -p "$LOCAL_BACKUP_DIR"
 
-        private_key = paramiko.RSAKey(file_obj=io.StringIO(PRIVATE_KEY))
+echo "Step 1: Copying files from SOURCE ($SOURCE_IP) to LOCAL..."
+sshpass -p "$PASSWORD" rsync -avz -e "ssh -i $SSH_KEY" "$SOURCE_USER@$SOURCE_IP:/home/" "$LOCAL_BACKUP_DIR/"
+if [ $? -ne 0 ]; then
+    echo "Failed to copy files from source."
+    exit 1
+fi
+echo "Files copied to local directory: $LOCAL_BACKUP_DIR"
 
-        # Try connecting with both key & password
-        ssh.connect(WORKSPACE_IP, username=USERNAME, pkey=private_key, password=PASSWORD)
-
-        stdin, stdout, stderr = ssh.exec_command("whoami")
-        result = stdout.read().decode()
-
-        ssh.close()
-        return {"statusCode": 200, "body": json.dumps(f"SSH successful! Output: {result}")}
-
-    except Exception as e:
-        return {"statusCode": 500, "body": json.dumps(f"SSH failed: {str(e)}")}
+echo "Step 2: Pushing files from LOCAL to DESTINATION ($DEST_IP)..."
+sshpass -p "$PASSWORD" rsync -avz -e "ssh -i $SSH_KEY" "$LOCAL_BACKUP_DIR/" "$DEST_USER@$DEST_IP:/home/"
+if [ $? -ne 0 ]; then
+    echo "Failed to push files to destination."
+    exit 1
+fi
+echo "Migration completed successfully!"
