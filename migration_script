@@ -1,0 +1,55 @@
+import paramiko
+import boto3
+import time
+
+# Load SSH private key from AWS Secrets Manager
+def get_ssh_key():
+    secrets_client = boto3.client("secretsmanager")
+    secret = secrets_client.get_secret_value(SecretId="my-migration-key")
+    return secret["SecretString"]
+
+# Function to SSH into a WorkSpace and execute commands
+def ssh_execute_command(host, username, private_key, command):
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    try:
+        key = paramiko.RSAKey.from_private_key(private_key)
+        ssh.connect(hostname=host, username=username, pkey=key)
+        stdin, stdout, stderr = ssh.exec_command(command)
+        output = stdout.read().decode()
+        error = stderr.read().decode()
+        ssh.close()
+        return output, error
+    except Exception as e:
+        return None, str(e)
+
+def lambda_handler(event, context):
+    # Define source and destination WorkSpaces
+    source_host = "SOURCE_WORKSPACE_IP"   # Replace with actual source WorkSpace IP
+    destination_host = "DESTINATION_WORKSPACE_IP"   # Replace with actual destination WorkSpace IP
+    username = "linux-user"  # Change based on OS (e.g., 'ec2-user', 'ubuntu')
+
+    # Retrieve private SSH key
+    private_key_str = get_ssh_key()
+    private_key = paramiko.RSAKey(file_obj=private_key_str)
+
+    # Step 1: Compress the home directory on source WorkSpace
+    compress_cmd = "tar -czf /tmp/home_backup.tar.gz /home/{user}".format(user=username)
+    output, error = ssh_execute_command(source_host, username, private_key, compress_cmd)
+    if error:
+        return {"status": "error", "message": f"Failed to compress home dir: {error}"}
+    
+    # Step 2: Transfer the compressed file to the destination WorkSpace
+    scp_cmd = "scp -i my-migration-key -o StrictHostKeyChecking=no /tmp/home_backup.tar.gz {user}@{dest}:/tmp/".format(user=username, dest=destination_host)
+    output, error = ssh_execute_command(source_host, username, private_key, scp_cmd)
+    if error:
+        return {"status": "error", "message": f"Failed to transfer file: {error}"}
+
+    # Step 3: Extract files on the destination WorkSpace
+    extract_cmd = "tar -xzf /tmp/home_backup.tar.gz -C /home/{user}".format(user=username)
+    output, error = ssh_execute_command(destination_host, username, private_key, extract_cmd)
+    if error:
+        return {"status": "error", "message": f"Failed to extract files: {error}"}
+
+    return {"status": "success", "message": "Home directory migrated successfully"}
