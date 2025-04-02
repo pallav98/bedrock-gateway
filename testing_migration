@@ -26,3 +26,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 echo "Migration completed successfully!"
+
+
+###sshpass -p "YourPasswordHere" rsync -avz -e "ssh -i $SSH_KEY" "$SOURCE_USER@$SOURCE_IP:/tmp/migration/" "$LOCAL_BACKUP_DIR/"
