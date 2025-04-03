@@ -14,13 +14,13 @@ mkdir -p "$LOCAL_BACKUP_DIR"
 
 echo "Copying data from source ($SOURCE_IP) to local machine..."
 sshpass -p "$PASSWORD" ssh -i $SSH_KEY $SOURCE_USER@$SOURCE_IP \
-    "echo '$PASSWORD' | sudo -S rsync -avz --numeric-ids --exclude='*.cache' /home/ /tmp/migration/"
+    "echo '$PASSWORD' | sudo -S rsync -avz --numeric-ids /home/ /tmp/migration/"
 
-sshpass -p "$PASSWORD" rsync -avz --numeric-ids --exclude='*.cache' -e "ssh -i $SSH_KEY" \
+sshpass -p "$PASSWORD" rsync -avz --numeric-ids -e "ssh -i $SSH_KEY" \
     "$SOURCE_USER@$SOURCE_IP:/tmp/migration/" "$LOCAL_BACKUP_DIR/"
 
 echo "Pushing data from local machine to destination ($DEST_IP)..."
-sshpass -p "$PASSWORD" rsync -avz --numeric-ids --exclude='*.cache' -e "ssh -i $SSH_KEY" \
+sshpass -p "$PASSWORD" rsync -avz --numeric-ids -e "ssh -i $SSH_KEY" \
     "$LOCAL_BACKUP_DIR/" "$DEST_USER@$DEST_IP:/home/"
 
 echo "Restoring permissions at destination..."
