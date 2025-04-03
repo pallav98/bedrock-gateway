@@ -1,30 +1,58 @@
 #!/bin/bash
 
-# Variables
+# Set Variables
+SOURCE_USER="source_user"
+SOURCE_IP="10.185.56.196"  # Source WorkSpace IP
+DEST_USER="dest_user"
+DEST_IP="10.42.97.252"      # Destination WorkSpace IP
 SSH_KEY="~/.ssh/wsansible.pem"
-SOURCE_USER="wsansible"
-SOURCE_IP="10.185.56.196"
-DEST_USER="wsansible"
-DEST_IP="10.42.97.252"
-LOCAL_BACKUP_DIR="/tmp/migration/"
 PASSWORD="YourPasswordHere"
+LOCAL_BACKUP_DIR="/tmp/workspace_migration"
+ARCHIVE_NAME="migration.tar.gz"
 
-# Ensure backup directory exists
+
 mkdir -p "$LOCAL_BACKUP_DIR"
 
-echo "Copying data from source ($SOURCE_IP) to local machine..."
-sshpass -p "$PASSWORD" ssh -i $SSH_KEY $SOURCE_USER@$SOURCE_IP \
-    "echo '$PASSWORD' | sudo -S rsync -avz --numeric-ids --exclude='*.cache' /home/ /tmp/migration/"
+echo "🔹 Step 1: Creating tar archive on the source WorkSpace..."
+sshpass -p "$PASSWORD" ssh -i "$SSH_KEY" "$SOURCE_USER@$SOURCE_IP" \
+    "sudo tar -czpf /tmp/$ARCHIVE_NAME --numeric-owner --exclude='*.cache' /home/"
 
-sshpass -p "$PASSWORD" rsync -avz --numeric-ids --exclude='*.cache' -e "ssh -i $SSH_KEY" \
-    "$SOURCE_USER@$SOURCE_IP:/tmp/migration/" "$LOCAL_BACKUP_DIR/"
+if [ $? -ne 0 ]; then
+    echo " Error: Failed to create tar archive on source."
+    exit 1
+fi
 
-echo "Pushing data from local machine to destination ($DEST_IP)..."
-sshpass -p "$PASSWORD" rsync -avz --numeric-ids --exclude='*.cache' -e "ssh -i $SSH_KEY" \
-    "$LOCAL_BACKUP_DIR/" "$DEST_USER@$DEST_IP:/home/"
+echo " Archive created successfully."
 
-echo "Restoring permissions at destination..."
-sshpass -p "$PASSWORD" ssh -i $SSH_KEY $DEST_USER@$DEST_IP \
-    "echo '$PASSWORD' | sudo -S chown -R --reference=/home/ /home/"
+# Copy the tar archive from source to local machine
+echo " Step 2: Copying archive to local machine..."
+sshpass -p "$PASSWORD" scp -i "$SSH_KEY" "$SOURCE_USER@$SOURCE_IP:/tmp/$ARCHIVE_NAME" "$LOCAL_BACKUP_DIR/"
 
-echo "Migration completed successfully with ownership and group preserved!"
+if [ $? -ne 0 ]; then
+    echo " Error: Failed to copy archive from source to local."
+    exit 1
+fi
+
+echo " Archive successfully copied to local."
+
+echo "🔹 Step 3: Copying archive to destination WorkSpace..."
+sshpass -p "$PASSWORD" scp -i "$SSH_KEY" "$LOCAL_BACKUP_DIR/$ARCHIVE_NAME" "$DEST_USER@$DEST_IP:/tmp/"
+
+if [ $? -ne 0 ]; then
+    echo "❌ Error: Failed to copy archive from local to destination."
+    exit 1
+fi
+
+echo " Archive successfully copied to destination."
+
+# Extract the archive on the destination WorkSpace
+echo "🔹 Step 4: Extracting archive on destination WorkSpace..."
+sshpass -p "$PASSWORD" ssh -i "$SSH_KEY" "$DEST_USER@$DEST_IP" \
+    "sudo tar -xzpf /tmp/$ARCHIVE_NAME -C /home/"
+
+if [ $? -ne 0 ]; then
+    echo " Error: Failed to extract archive on destination."
+    exit 1
+fi
+
+echo " Migration completed successfully!"
