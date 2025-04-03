@@ -1,0 +1,11 @@
+The migration script is now ready. I wanted to update you on the approach for migrating home directories between AWS WorkSpaces. Initially, we planned to use AWS Lambda, but after further analysis, we decided to switch to a local Bash script for better control and reliability.
+Reason for the Change:
+	•	Authentication & Network Restrictions – Direct remote-to-remote transfers faced challenges, making them unreliable.
+	•	AWS Lambda Limitations – Execution time and storage constraints made Lambda inefficient for large file migrations.
+	•	Data Integrity – The script ensures files are added or updated without disrupting existing data.
+How the Script Works:
+	•	Reads the source and destination WorkSpace details from a CSV file.
+	•	Connects to the source WorkSpace and creates a compressed archive of the home directory.
+	•	Transfers the archive to a local system before moving it to the destination WorkSpace.
+	•	Supports both 1:1 and 1:many migrations.
+	•	Extracts the archive on the destination WorkSpace, ensuring files are updated without deletion.
