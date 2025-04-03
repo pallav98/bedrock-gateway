@@ -13,7 +13,7 @@ ARCHIVE_NAME="migration.tar.gz"
 
 mkdir -p "$LOCAL_BACKUP_DIR"
 
-echo "🔹 Step 1: Creating tar archive on the source WorkSpace..."
+echo "Step 1: Creating tar archive on the source WorkSpace..."
 sshpass -p "$PASSWORD" ssh -i "$SSH_KEY" "$SOURCE_USER@$SOURCE_IP" \
     "echo '$PASSWORD' | sudo -S tar -czpf /tmp/$ARCHIVE_NAME --numeric-owner --exclude='*.cache' /home/"
 
@@ -35,11 +35,11 @@ fi
 
 echo " Archive successfully copied to local."
 
-echo "🔹 Step 3: Copying archive to destination WorkSpace..."
+echo "Step 3: Copying archive to destination WorkSpace..."
 sshpass -p "$PASSWORD" scp -i "$SSH_KEY" "$LOCAL_BACKUP_DIR/$ARCHIVE_NAME" "$DEST_USER@$DEST_IP:/tmp/"
 
 if [ $? -ne 0 ]; then
-    echo "❌ Error: Failed to copy archive from local to destination."
+    echo "Error: Failed to copy archive from local to destination."
     exit 1
 fi
 
@@ -48,7 +48,7 @@ echo " Archive successfully copied to destination."
 # Extract the archive on the destination WorkSpace
 echo " Step 4: Extracting archive on destination WorkSpace..."
 sshpass -p "$PASSWORD" ssh -i "$SSH_KEY" "$DEST_USER@$DEST_IP" \
-    "echo '$PASSWORD' | sudo -S tar --keep-newer-files --skip-old-files -xzpf /tmp/$ARCHIVE_NAME -C / --strip-components=1"
+    "echo '$PASSWORD' | sudo -S tar  --skip-old-files -xzpf /tmp/$ARCHIVE_NAME -C /home --strip-components=1"
 
 
 if [ $? -ne 0 ]; then
