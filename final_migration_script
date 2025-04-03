@@ -1,0 +1,73 @@
+#!/bin/bash
+
+SOURCE_FILE="workspace_deatils_with_dir.csv"
+DEST_FILE="workspace_deatils_withprod_dir.csv"
+SSH_KEY="/path/to/your/private_key.pem"
+PASSWORD="your_password"
+ARCHIVE_NAME="home_backup.tar.gz"
+LOCAL_BACKUP_DIR="/tmp/migration_backup"
+REMOTE_BACKUP_DIR="/tmp/migration"
+LOG_FILE="/tmp/migration.log"
+
+# Ensure log and backup directories exist
+mkdir -p "$LOCAL_BACKUP_DIR"
+touch "$LOG_FILE"
+
+echo "Migration started at $(date)" | tee -a "$LOG_FILE"
+
+# Read destination file
+while IFS=, read -r DEST_USERNAME DEST_IPADDR; do
+    # Skip the header
+    if [[ "$DEST_USERNAME" == "Username" ]]; then
+        continue
+    fi
+
+    echo "Checking $DEST_USERNAME in source file..." | tee -a "$LOG_FILE"
+    
+    # Find matching entry in the source file
+    MATCHES=$(grep -w "$DEST_USERNAME" "$SOURCE_FILE")
+    MATCH_COUNT=$(echo "$MATCHES" | wc -l)
+    
+    if [[ $MATCH_COUNT -eq 0 ]]; then
+        echo "No source entry found for $DEST_USERNAME. Skipping..." | tee -a "$LOG_FILE"
+        continue
+    elif [[ $MATCH_COUNT -gt 1 ]]; then
+        echo "Multiple source entries found for $DEST_USERNAME. Skipping..." | tee -a "$LOG_FILE"
+        continue
+    fi
+    
+    # Extract source IP
+    SOURCE_IP=$(echo "$MATCHES" | cut -d',' -f2)
+    
+    echo "Processing $DEST_USERNAME from $SOURCE_IP to $DEST_IPADDR..." | tee -a "$LOG_FILE"
+    
+    # Check SSH connectivity
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "wsansible@$SOURCE_IP" "echo 'SSH successful'" || {
+        echo "SSH to source failed for $SOURCE_IP" | tee -a "$LOG_FILE"
+        continue
+    }
+    
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "wsansible@$DEST_IPADDR" "echo 'SSH successful'" || {
+        echo "SSH to destination failed for $DEST_IPADDR" | tee -a "$LOG_FILE"
+        continue
+    }
+    
+    echo "Creating archive on source..." | tee -a "$LOG_FILE"
+    sshpass -p "$PASSWORD" ssh -i "$SSH_KEY" "wsansible@$SOURCE_IP" \
+        "echo '$PASSWORD' | sudo -S tar --numeric-owner --exclude='*.cache' -czpf $REMOTE_BACKUP_DIR/$ARCHIVE_NAME -C /home/ $DEST_USERNAME" \
+        && echo "Archive created successfully on $SOURCE_IP" | tee -a "$LOG_FILE"
+
+    echo "Transferring archive to destination..." | tee -a "$LOG_FILE"
+    sshpass -p "$PASSWORD" scp -i "$SSH_KEY" "wsansible@$SOURCE_IP:$REMOTE_BACKUP_DIR/$ARCHIVE_NAME" "wsansible@$DEST_IPADDR:$REMOTE_BACKUP_DIR/" \
+        && echo "Archive transferred successfully to $DEST_IPADDR" | tee -a "$LOG_FILE"
+    
+    echo "Extracting archive on destination..." | tee -a "$LOG_FILE"
+    sshpass -p "$PASSWORD" ssh -i "$SSH_KEY" "wsansible@$DEST_IPADDR" \
+        "echo '$PASSWORD' | sudo -S tar --numeric-owner --overwrite -xzpf $REMOTE_BACKUP_DIR/$ARCHIVE_NAME -C /home/" \
+        && echo "Extraction completed for $DEST_USERNAME on $DEST_IPADDR" | tee -a "$LOG_FILE"
+    
+    echo "Migration for $DEST_USERNAME completed." | tee -a "$LOG_FILE"
+
+done < "$DEST_FILE"
+
+echo "Migration completed at $(date)" | tee -a "$LOG_FILE"
