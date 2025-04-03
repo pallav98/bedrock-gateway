@@ -41,12 +41,13 @@ while IFS=, read -r DEST_USERNAME DEST_IPADDR; do
     
     echo "Processing $DEST_USERNAME from $SOURCE_IP to $DEST_IPADDR..." | tee -a "$LOG_FILE"
     
-    # Check SSH connectivity
+    # Check SSH connectivity to source
     sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "wsansible@$SOURCE_IP" "echo 'SSH successful'" || {
         echo "SSH to source failed for $SOURCE_IP" | tee -a "$LOG_FILE"
         continue
     }
     
+    # Check SSH connectivity to destination
     sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "wsansible@$DEST_IPADDR" "echo 'SSH successful'" || {
         echo "SSH to destination failed for $DEST_IPADDR" | tee -a "$LOG_FILE"
         continue
@@ -57,15 +58,23 @@ while IFS=, read -r DEST_USERNAME DEST_IPADDR; do
         "echo '$PASSWORD' | sudo -S tar --numeric-owner --exclude='*.cache' -czpf $REMOTE_BACKUP_DIR/$ARCHIVE_NAME -C /home/ $DEST_USERNAME" \
         && echo "Archive created successfully on $SOURCE_IP" | tee -a "$LOG_FILE"
 
-    echo "Transferring archive to destination..." | tee -a "$LOG_FILE"
-    sshpass -p "$PASSWORD" scp -i "$SSH_KEY" "wsansible@$SOURCE_IP:$REMOTE_BACKUP_DIR/$ARCHIVE_NAME" "wsansible@$DEST_IPADDR:$REMOTE_BACKUP_DIR/" \
-        && echo "Archive transferred successfully to $DEST_IPADDR" | tee -a "$LOG_FILE"
+    echo "Downloading archive to local machine..." | tee -a "$LOG_FILE"
+    sshpass -p "$PASSWORD" scp -i "$SSH_KEY" "wsansible@$SOURCE_IP:$REMOTE_BACKUP_DIR/$ARCHIVE_NAME" "$LOCAL_BACKUP_DIR/" \
+        && echo "Archive downloaded successfully to local machine" | tee -a "$LOG_FILE"
+    
+    echo "Uploading archive to destination..." | tee -a "$LOG_FILE"
+    sshpass -p "$PASSWORD" scp -i "$SSH_KEY" "$LOCAL_BACKUP_DIR/$ARCHIVE_NAME" "wsansible@$DEST_IPADDR:$REMOTE_BACKUP_DIR/" \
+        && echo "Archive uploaded successfully to $DEST_IPADDR" | tee -a "$LOG_FILE"
     
     echo "Extracting archive on destination..." | tee -a "$LOG_FILE"
     sshpass -p "$PASSWORD" ssh -i "$SSH_KEY" "wsansible@$DEST_IPADDR" \
-        "echo '$PASSWORD' | sudo -S tar --numeric-owner --overwrite -xzpf $REMOTE_BACKUP_DIR/$ARCHIVE_NAME -C /home/" \
+    "echo '$PASSWORD' | sudo -S tar --numeric-owner --overwrite -xzpf $REMOTE_BACKUP_DIR/$ARCHIVE_NAME -C /home --strip-components=1" \
         && echo "Extraction completed for $DEST_USERNAME on $DEST_IPADDR" | tee -a "$LOG_FILE"
+
     
+    # Clean up local storage after each migration
+    rm -f "$LOCAL_BACKUP_DIR/$ARCHIVE_NAME"
+
     echo "Migration for $DEST_USERNAME completed." | tee -a "$LOG_FILE"
 
 done < "$DEST_FILE"
