@@ -15,7 +15,7 @@ mkdir -p "$LOCAL_BACKUP_DIR"
 
 echo "🔹 Step 1: Creating tar archive on the source WorkSpace..."
 sshpass -p "$PASSWORD" ssh -i "$SSH_KEY" "$SOURCE_USER@$SOURCE_IP" \
-    "sudo tar -czpf /tmp/$ARCHIVE_NAME --numeric-owner --exclude='*.cache' /home/"
+    "echo '$PASSWORD' | sudo -S tar -czpf /tmp/$ARCHIVE_NAME --numeric-owner --exclude='*.cache' /home/"
 
 if [ $? -ne 0 ]; then
     echo " Error: Failed to create tar archive on source."
@@ -46,9 +46,10 @@ fi
 echo " Archive successfully copied to destination."
 
 # Extract the archive on the destination WorkSpace
-echo "🔹 Step 4: Extracting archive on destination WorkSpace..."
+echo " Step 4: Extracting archive on destination WorkSpace..."
 sshpass -p "$PASSWORD" ssh -i "$SSH_KEY" "$DEST_USER@$DEST_IP" \
-    "sudo tar -xzpf /tmp/$ARCHIVE_NAME -C /home/"
+    "echo '$PASSWORD' | sudo -S tar --keep-newer-files --skip-old-files -xzpf /tmp/$ARCHIVE_NAME -C / --strip-components=1"
+
 
 if [ $? -ne 0 ]; then
     echo " Error: Failed to extract archive on destination."
