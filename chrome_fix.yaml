@@ -1,0 +1,51 @@
+---
+- name: Set up repositories and install packages
+  hosts: all
+  become: true
+
+  tasks:
+
+    - name: Download GPG keys
+      get_url:
+        url: "{{ item.url }}"
+        dest: "{{ item.dest }}"
+        mode: '0644'
+      loop:
+        - { url: 'https://dl.google.com/linux/linux_signing_key.pub', dest: '/usr/share/keyrings/google-linux.gpg' }
+        - { url: 'https://download.docker.com/linux/ubuntu/gpg', dest: '/usr/share/keyrings/docker.gpg' }
+        - { url: 'https://apt.corretto.aws/corretto.key', dest: '/usr/share/keyrings/corretto.gpg' }
+
+    - name: Add APT repositories
+      apt_repository:
+        repo: "{{ item.repo }}"
+        state: present
+      loop:
+        - { repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" }
+        - { repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable" }
+        - { repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/corretto.gpg] https://apt.corretto.aws stable main" }
+
+    - name: Remove unwanted APT packages
+      apt:
+        state: absent
+        pkg:
+          - awscli
+          - chromium-browser
+          - aisleriot
+          - gnome-sudoku
+          - mahjongg
+          - ace-of-penguins
+          - gbrainy
+          - gnome-mines
+          - thunderbird
+          - duplicity
+
+    - name: Install required APT packages
+      apt:
+        state: present
+        pkg:
+          - google-chrome-stable
+          - ant
+          - apt-transport-https
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
