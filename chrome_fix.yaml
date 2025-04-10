@@ -1,51 +1,29 @@
----
-- name: Set up repositories and install packages
-  hosts: all
-  become: true
+- name: Add Google Chrome GPG key securely
+  ansible.builtin.get_url:
+    url: https://dl.google.com/linux/linux_signing_key.pub
+    dest: /usr/share/keyrings/google-linux-signing-key.pub
+    mode: '0644'
+    force: true
+    validate_certs: true
 
-  tasks:
+- name: apt-key add for other tools
+  apt_key:
+    url: "{{ item.url }}"
+    state: "{{ item.state }}"
+  loop:
+    - { state: "present", url: "https://download.docker.com/linux/ubuntu/gpg" }
+    - { state: "present", url: "https://apt.corretto.aws/corretto.key" }
 
-    - name: Download GPG keys
-      get_url:
-        url: "{{ item.url }}"
-        dest: "{{ item.dest }}"
-        mode: '0644'
-      loop:
-        - { url: 'https://dl.google.com/linux/linux_signing_key.pub', dest: '/usr/share/keyrings/google-linux.gpg' }
-        - { url: 'https://download.docker.com/linux/ubuntu/gpg', dest: '/usr/share/keyrings/docker.gpg' }
-        - { url: 'https://apt.corretto.aws/corretto.key', dest: '/usr/share/keyrings/corretto.gpg' }
+- name: Add Google Chrome APT repository
+  apt_repository:
+    repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-signing-key.pub] http://dl.google.com/linux/chrome/deb/ stable main"
+    state: present
+    filename: google-chrome
 
-    - name: Add APT repositories
-      apt_repository:
-        repo: "{{ item.repo }}"
-        state: present
-      loop:
-        - { repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" }
-        - { repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable" }
-        - { repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/corretto.gpg] https://apt.corretto.aws stable main" }
-
-    - name: Remove unwanted APT packages
-      apt:
-        state: absent
-        pkg:
-          - awscli
-          - chromium-browser
-          - aisleriot
-          - gnome-sudoku
-          - mahjongg
-          - ace-of-penguins
-          - gbrainy
-          - gnome-mines
-          - thunderbird
-          - duplicity
-
-    - name: Install required APT packages
-      apt:
-        state: present
-        pkg:
-          - google-chrome-stable
-          - ant
-          - apt-transport-https
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
+- name: Add Docker and Corretto APT repositories
+  apt_repository:
+    repo: "{{ item.repo }}"
+    state: "{{ item.state }}"
+  loop:
+    - { state: "present", repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu jammy stable" }
+    - { state: "present", repo: "deb [arch=amd64] https://apt.corretto.aws stable main" }
