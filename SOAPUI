@@ -1,2 +1,10 @@
 SOAPUI
-https://dl.eviware.com/soapuios/5.8.0/SoapUI-x64-5.8.0.sh
+# 1. Download the installer script
+wget https://dl.eviware.com/soapuios/5.8.0/SoapUI-x64-5.8.0.sh
+
+# 2. Make the installer executable
+chmod +x SoapUI-x64-5.8.0.sh
+
+# 3. Run the installer
+./SoapUI-x64-5.8.0.sh
+
