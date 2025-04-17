@@ -1,0 +1,6 @@
+aws ssm send-command \
+  --document-name "AWS-RunPowerShellScript" \
+  --instance-ids i-xxxxxxxxxxxxxxxxx \
+  --comment "Get private IP address" \
+  --parameters 'commands=["ipconfig"]' \
+  --profile workspace-ss-prod
