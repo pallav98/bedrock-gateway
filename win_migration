@@ -4,3 +4,19 @@ aws ssm send-command \
   --comment "Get private IP address" \
   --parameters 'commands=["ipconfig"]' \
   --profile workspace-ss-prod
+
+
+
+aws ssm send-command \
+  --document-name "AWS-RunPowerShellScript" \
+  --instance-ids i-xxxxxxxxxxxxxxxxx \
+  --comment "Write file and compress user folder in D drive" \
+  --parameters 'commands=[
+      "New-Item -Path \"D:\\sample.txt\" -ItemType File -Force",
+      "Set-Content -Path \"D:\\sample.txt\" -Value \"This is a test file created via SSM.\"",
+      "$sourceFolder = \"D:\\Users\\JohnDoe\"",
+      "$destinationZip = \"D:\\UserBackup.zip\"",
+      "Compress-Archive -Path $sourceFolder -DestinationPath $destinationZip -Force"
+  ]' \
+  --profile workspace-ss-prod \
+  --region <your-region>
