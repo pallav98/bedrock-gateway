@@ -20,3 +20,13 @@ aws ssm send-command \
   ]' \
   --profile workspace-ss-prod \
   --region <your-region>
+
+
+aws ssm send-command \
+  --document-name "AWS-RunPowerShellScript" \
+  --instance-ids i-xxxxxxxxxxxxxxxxx \
+  --comment "Upload UserBackup.zip to S3" \
+  --parameters 'commands=[
+      "aws s3 cp D:\\UserBackup.zip s3://your-bucket-name/UserBackup.zip"
+  ]' \
+  --profile workspace-ss-prod
