@@ -30,3 +30,15 @@ aws ssm send-command \
       "aws s3 cp D:\\UserBackup.zip s3://your-bucket-name/UserBackup.zip"
   ]' \
   --profile workspace-ss-prod
+
+
+
+
+aws ssm send-command \
+  --document-name "AWS-RunPowerShellScript" \
+  --instance-ids i-03d89351dc7c0dd19 \
+  --comment "List D drive and fdjapi folder" \
+  --parameters '{"commands":["Get-ChildItem -Path D:\\\\","Get-ChildItem -Path D:\\\\Users\\\\fdjapi"]}' \
+  --profile workspace-ss-prod
+
+
