@@ -41,4 +41,12 @@ aws ssm send-command \
   --parameters '{"commands":["Get-ChildItem -Path D:\\\\","Get-ChildItem -Path D:\\\\Users\\\\fdjapi"]}' \
   --profile workspace-ss-prod
 
+#####################################
+
+aws workspaces describe-workspaces \
+  --directory-id <your-directory-id> \
+  --query "Workspaces[?WorkspaceProperties.OperatingSystemName=='WINDOWS'].{UserName:UserName, Ip:IpAddress, EncryptionKey:VolumeEncryptionKey}" \
+  --output table --profile workspace-ss-prod
+
+
 
