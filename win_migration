@@ -44,9 +44,10 @@ aws ssm send-command \
 #####################################
 
 aws workspaces describe-workspaces \
-  --directory-id <your-directory-id> \
-  --query "Workspaces[?WorkspaceProperties.OperatingSystemName=='WINDOWS'].{UserName:UserName, Ip:IpAddress, EncryptionKey:VolumeEncryptionKey}" \
-  --output table --profile workspace-ss-prod
+  --directory-id d-9067873cf8 \
+  --query "Workspaces[?contains(OperatingSystemName, 'WINDOWS') && State=='AVAILABLE'].{UserName: UserName, Ip: IpAddress, EncryptionKey: VolumeEncryptionKey}" \
+  --output table
+
 
 
 
