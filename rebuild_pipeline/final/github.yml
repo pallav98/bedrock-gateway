@@ -11,7 +11,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Rebuild all Workspaces
-        run: ./rebuild/ubuntu/scripts/rebuild_all.sh
+        run: ./rebuild/ubuntu/scripts/rebuild.sh
 
       - name: Wait for Workspaces to Become Available
         run: ./rebuild/ubuntu/scripts/wait_for_all_available.sh
