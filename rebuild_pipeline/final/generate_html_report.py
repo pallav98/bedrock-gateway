@@ -20,6 +20,8 @@ def df_to_html(df, title):
 def main():
     rebuild_df = pd.read_csv("data/rebuild_status.csv")
     baseline_df = pd.read_csv("data/baseline_status.csv")
+    wait_df = pd.read_csv("data/wait_status.csv")
+    
 
     html = """
     <html><head><meta charset="UTF-8"><title>Workspace Report</title>
@@ -37,6 +39,7 @@ def main():
     """
     html += df_to_html(rebuild_df, "rebuild")
     html += df_to_html(baseline_df, "baseline")
+    html += df_to_html(wait_df, "wait")
     html += """
     <script>
     function filterTable(col, tableId) {
