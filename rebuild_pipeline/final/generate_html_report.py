@@ -1,12 +1,13 @@
+import os
 import pandas as pd
 
 def df_to_html(df, title):
     html = f"<h2>{title}</h2>"
-    html += """
-    <table id="{0}">
+    html += f"""
+    <table id="{title}">
       <thead>
         <tr>""" + ''.join(f"<th>{col}</th>" for col in df.columns) + """</tr>
-        <tr>""" + ''.join(f"<th><input class='filter-input' onkeyup='filterTable({i}, \"{0}\")' placeholder='Filter {col}'></th>" for i, col in enumerate(df.columns)) + """</tr>
+        <tr>""" + ''.join(f"<th><input class='filter-input' onkeyup='filterTable({i}, \"{title}\")' placeholder='Filter {col}'></th>" for i, col in enumerate(df.columns)) + """</tr>
       </thead>
       <tbody>
     """
@@ -17,12 +18,10 @@ def df_to_html(df, title):
     html += "</tbody></table><br><hr><br>"
     return html
 
-def main():
-    rebuild_df = pd.read_csv("data/rebuild_status.csv")
-    baseline_df = pd.read_csv("data/baseline_status.csv")
-    wait_df = pd.read_csv("data/wait_status.csv")
-    
+def section_not_found(title):
+    return f"<h2>{title}</h2><p><i>{title.capitalize()} step skipped — no data file found.</i></p><hr><br>"
 
+def main():
     html = """
     <html><head><meta charset="UTF-8"><title>Workspace Report</title>
     <style>
@@ -37,9 +36,20 @@ def main():
     </head><body>
     <h1>Workspace Rebuild & Baseline Report</h1>
     """
-    html += df_to_html(rebuild_df, "rebuild")
-    html += df_to_html(baseline_df, "baseline")
-    html += df_to_html(wait_df, "wait")
+
+    files = {
+        "rebuild": "data/rebuild_status.csv",
+        "baseline": "data/baseline_status.csv",
+        "wait": "data/wait_status.csv"
+    }
+
+    for section, filepath in files.items():
+        if os.path.exists(filepath):
+            df = pd.read_csv(filepath)
+            html += df_to_html(df, section)
+        else:
+            html += section_not_found(section)
+
     html += """
     <script>
     function filterTable(col, tableId) {
