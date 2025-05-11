@@ -1,0 +1,26 @@
+name: Workspace Pipeline
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rebuild-and-baseline:
+    runs-on: [self-hosted]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Rebuild all Workspaces
+        run: ./rebuild/ubuntu/scripts/rebuild_all.sh
+
+      - name: Wait for Workspaces to Become Available
+        run: ./rebuild/ubuntu/scripts/wait_for_all_available.sh
+
+      - name: Run Baseline on all Workspaces
+        run: ./rebuild/ubuntu/scripts/run_baseline.sh
+
+      # - name: Generate HTML Report
+      #   run: python3 ./rebuild/ubuntu/scripts/generate_html_report.py
+
+      # - name: Send Email with Report via SNS
+      #   run: ./rebuild/ubuntu/scripts/send_email.sh
