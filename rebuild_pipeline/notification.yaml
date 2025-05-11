@@ -1,0 +1,100 @@
+name: Rebuild AWS Workspace and Run Baseline
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rebuild-workspace:
+    runs-on: ubuntu-latest
+
+    env:
+      WORKSPACE_ID: ws-xxxxxxxxx
+      REGION: us-east-1
+      SNS_TOPIC_ARN: arn:aws:sns:us-east-1:123456789012:your-sns-topic
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.REGION }}
+
+    - name: Get Workspace Username
+      id: getuser
+      run: |
+        USERNAME=$(aws workspaces describe-workspaces \
+          --workspace-ids "$WORKSPACE_ID" \
+          --query 'Workspaces[0].UserName' \
+          --output text)
+        echo "USERNAME=$USERNAME" >> $GITHUB_ENV
+        echo "::set-output name=username::$USERNAME"
+
+    - name: Rebuild Workspace
+      id: rebuild
+      run: |
+        echo "| Step | Status | Message |" > report.txt
+        echo "|------|--------|---------|" >> report.txt
+        echo "Rebuilding workspace $WORKSPACE_ID..."
+        if aws workspaces rebuild-workspace --workspace-id "$WORKSPACE_ID"; then
+          echo "| Rebuild Workspace | ✅ | Rebuild initiated |" >> report.txt
+        else
+          echo "| Rebuild Workspace | ❌ | Rebuild failed |" >> report.txt
+          exit 1
+        fi
+
+    - name: Wait for Workspace to be AVAILABLE
+      id: waitavailable
+      run: |
+        echo "Waiting for workspace to become AVAILABLE..."
+        for i in {1..30}; do
+          STATUS=$(aws workspaces describe-workspaces \
+            --workspace-ids "$WORKSPACE_ID" \
+            --query 'Workspaces[0].State' \
+            --output text)
+          echo "Current status: $STATUS"
+          if [[ "$STATUS" == "AVAILABLE" ]]; then
+            echo "| Wait for Available | ✅ | Workspace is ready |" >> report.txt
+            exit 0
+          fi
+          sleep 30
+        done
+        echo "| Wait for Available | ❌ | Timeout waiting for AVAILABLE |" >> report.txt
+        exit 1
+
+    - name: Run Baseline Script
+      id: runbaseline
+      run: |
+        chmod +x ./run_user.sh
+        if ./run_user.sh -i "wsansible@$WORKSPACE_ID" -v -n -t baseline; then
+          echo "| Run Baseline Script | ✅ | Script ran successfully |" >> report.txt
+        else
+          echo "| Run Baseline Script | ❌ | Script failed |" >> report.txt
+        fi
+
+    - name: Build HTML Report
+      run: |
+        echo "<html><body>" > report.html
+        echo "<h2>AWS Workspace Automation Report</h2>" >> report.html
+        echo "<b>Workspace ID:</b> $WORKSPACE_ID<br>" >> report.html
+        echo "<b>Username:</b> $USERNAME<br><br>" >> report.html
+        echo "<table border='1' cellpadding='5' cellspacing='0'>" >> report.html
+        echo "<tr><th>Step</th><th>Status</th><th>Message</th></tr>" >> report.html
+        tail -n +3 report.txt | while read -r line; do
+          step=$(echo "$line" | cut -d'|' -f2 | xargs)
+          status=$(echo "$line" | cut -d'|' -f3 | xargs)
+          msg=$(echo "$line" | cut -d'|' -f4 | xargs)
+          echo "<tr><td>$step</td><td>$status</td><td>$msg</td></tr>" >> report.html
+        done
+        echo "</table></body></html>" >> report.html
+
+    - name: Send Report via SNS
+      run: |
+        aws sns publish \
+          --topic-arn "$SNS_TOPIC_ARN" \
+          --subject "Workspace Report - $WORKSPACE_ID" \
+          --message file://report.html \
+          --message-attributes '{"AWS.SNS.MIMEType":{"DataType":"String","StringValue":"text/html"}}'
