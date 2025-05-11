@@ -11,23 +11,24 @@ echo "workspaceid,username,status,message" > "$WAIT_LOG"
 
 declare -A final_states
 
+# First count total workspaces (skip header)
+total_workspaces=$(tail -n +2 "$INPUT_FILE" | wc -l | awk '{print $1}')
+echo "Total workspaces to check: $total_workspaces"
+
 retry=0
-pending=0  # Initialize outside the loop
 echo "Waiting for workspaces to become AVAILABLE..."
 
-# First count total workspaces
-total_workspaces=0
-while IFS=',' read -r WORKSPACE_ID _; do
-    [[ -z "$WORKSPACE_ID" || "$WORKSPACE_ID" == "workspaceid" ]] && continue
-    ((total_workspaces++))
-done < "$INPUT_FILE"
-
 while [[ $retry -lt $MAX_RETRIES ]]; do
-  pending=0  # Reset counter each iteration
-  while IFS=',' read -r WORKSPACE_ID USERNAME; do
-    [[ "$WORKSPACE_ID" == "workspaceid" ]] && continue
-
+  pending=0
+  processed=0
+  
+  # Skip header row with tail -n +2
+  while IFS=',' read -r WORKSPACE_ID USERNAME || [[ -n "$WORKSPACE_ID" ]]; do
+    # Skip empty lines
+    [[ -z "$WORKSPACE_ID" ]] && continue
+    
     if [[ -n "${final_states[$WORKSPACE_ID]+_}" ]]; then
+      ((processed++))
       continue  # already marked success
     fi
 
@@ -38,14 +39,17 @@ while [[ $retry -lt $MAX_RETRIES ]]; do
       final_states["$WORKSPACE_ID"]="$USERNAME"
       echo "$WORKSPACE_ID,$USERNAME,SUCCESS,Available after $((retry*SLEEP_INTERVAL/60)) min" >> "$WAIT_LOG"
       echo "Workspace $WORKSPACE_ID is now AVAILABLE"
+      ((processed++))
     elif [[ "$STATE" == "UNKNOWN" ]]; then
       echo "Workspace $WORKSPACE_ID could not be queried"
       ((pending++))
+      ((processed++))
     else
       echo "Workspace $WORKSPACE_ID still in state: $STATE"
       ((pending++))
+      ((processed++))
     fi
-  done < "$INPUT_FILE"
+  done < <(tail -n +2 "$INPUT_FILE")
 
   if [[ $pending -eq 0 ]]; then
     echo "All $total_workspaces workspaces are now AVAILABLE."
@@ -59,13 +63,13 @@ while [[ $retry -lt $MAX_RETRIES ]]; do
 done
 
 # Log any remaining as failed
-while IFS=',' read -r WORKSPACE_ID USERNAME; do
-  [[ "$WORKSPACE_ID" == "workspaceid" ]] && continue
+while IFS=',' read -r WORKSPACE_ID USERNAME || [[ -n "$WORKSPACE_ID" ]]; do
+  [[ -z "$WORKSPACE_ID" ]] && continue
   if [[ -z "${final_states[$WORKSPACE_ID]+_}" ]]; then
     echo "$WORKSPACE_ID,$USERNAME,FAILED,Timed out after $((MAX_RETRIES*SLEEP_INTERVAL/60)) min" >> "$WAIT_LOG"
     echo "Workspace $WORKSPACE_ID FAILED to become available"
   fi
-done < "$INPUT_FILE"
+done < <(tail -n +2 "$INPUT_FILE")
 
 # Final status report
 success_count=$((${#final_states[@]}))
