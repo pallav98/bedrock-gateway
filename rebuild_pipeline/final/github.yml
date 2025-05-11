@@ -23,8 +23,13 @@ jobs:
       - name: Run Baseline on all Workspaces
         run: ./scripts/run_baseline.sh
 
-      - name: Generate HTML Report
-        run: python3 ./scripts/generate_html_report.py
+      - name: Set up Python venv and install dependencies
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install pandas
+          python3 ./scripts/generate_html_report.py
+
 
       - name: Send Email with Report via SNS
         run: ./scripts/send_email.sh
