@@ -1,18 +1,26 @@
 #!/bin/bash
-set -euo pipefail
 
-TOPIC_ARN="arn:aws:sns:us-east-1:123456789012:YourTopicName"  # Replace with your ARN
+# Configuration
+SMTP_SERVER="smtp.gsa.gov"
+SMTP_PORT=25
+FROM_ADDR="fcs_alerting.no_reply@gsa.gov"
+TO_ADDR="jordan.hatchell@gsa.gov"
+SUBJECT="Workspace Rebuild Report"
 REPORT_FILE="workspace_report.html"
 
+# Check if the report file exists
 if [[ ! -f "$REPORT_FILE" ]]; then
-  echo "Report not found!"
+  echo "Report file '$REPORT_FILE' not found!"
   exit 1
 fi
 
-aws sns publish \
-  --topic-arn "$TOPIC_ARN" \
-  --subject "Workspace Maintenance Report" \
-  --message file://"$REPORT_FILE" \
-  --message-attributes '{"AWS.SNS.MAIL.MessageFormat":{"DataType":"String","StringValue":"HTML"}}'
-
-echo "Report sent to SNS topic."
+# Create the email headers and body
+{
+  echo "To: ${TO_ADDR}"
+  echo "From: ${FROM_ADDR}"
+  echo "Subject: ${SUBJECT}"
+  echo "MIME-Version: 1.0"
+  echo "Content-Type: text/html"
+  echo ""
+  cat "${REPORT_FILE}"
+} | /usr/sbin/sendmail -t
