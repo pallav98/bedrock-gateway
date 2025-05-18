@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# Prompt for input once
+read -rp "Enter source username: " SOURCE_USER
+read -rp "Enter source IP address: " SOURCE_IP
+read -rp "Enter target username: " TARGET_USER
+read -rp "Enter target IP address: " TARGET_IP
+read -rp "Enter path to SSH private key (.pem): " SSH_KEY
+
+# Config
+SSH_USER="wsansible"
+SSH_KEY="~/.ssh/id.pem"
+ARCHIVE_NAME="home_backup_${SOURCE_USER}.tar.gz"
+LOCAL_BACKUP_DIR="/tmp/migration_backup"
+REMOTE_BACKUP_DIR="/tmp/migration"
+LOG_FILE="/tmp/home_migration.log"
+
+# Prepare local environment
+mkdir -p "$LOCAL_BACKUP_DIR"
+touch "$LOG_FILE"
+
+log() {
+    echo "[$(date '+%F %T')] $*" | tee -a "$LOG_FILE"
+}
+
+log "==== Starting Migration from $SOURCE_USER@$SOURCE_IP to $TARGET_USER@$TARGET_IP ===="
+
+# SSH checks
+log "Checking SSH to source..."
+ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$SOURCE_IP" "echo SSH OK" >/dev/null || {
+    log "ERROR: SSH to source failed"
+    exit 1
+}
+
+log "Checking SSH to target..."
+ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$TARGET_IP" "echo SSH OK" >/dev/null || {
+    log "ERROR: SSH to target failed"
+    exit 1
+}
+
+# User existence
+log "Validating user $SOURCE_USER exists on source..."
+ssh -i "$SSH_KEY" "$SSH_USER@$SOURCE_IP" "id $SOURCE_USER" >/dev/null || {
+    log "ERROR: User $SOURCE_USER not found on source"
+    exit 1
+}
+
+log "Validating user $TARGET_USER exists on target..."
+ssh -i "$SSH_KEY" "$SSH_USER@$TARGET_IP" "id $TARGET_USER" >/dev/null || {
+    log "ERROR: User $TARGET_USER not found on target"
+    exit 1
+}
+
+# Create archive on source
+log "Creating archive of /home/$SOURCE_USER on source..."
+ssh -i "$SSH_KEY" "$SSH_USER@$SOURCE_IP" "
+    sudo mkdir -p $REMOTE_BACKUP_DIR &&
+    sudo tar --numeric-owner --exclude='*.cache' -czpf $REMOTE_BACKUP_DIR/$ARCHIVE_NAME -C /home $SOURCE_USER
+" || {
+    log "ERROR: Archive creation failed on source"
+    exit 1
+}
+
+# Transfer archive
+log "Downloading archive from source..."
+scp -i "$SSH_KEY" "$SSH_USER@$SOURCE_IP:$REMOTE_BACKUP_DIR/$ARCHIVE_NAME" "$LOCAL_BACKUP_DIR/" || {
+    log "ERROR: Failed to download archive"
+    exit 1
+}
+
+log "Uploading archive to target..."
+scp -i "$SSH_KEY" "$LOCAL_BACKUP_DIR/$ARCHIVE_NAME" "$SSH_USER@$TARGET_IP:$REMOTE_BACKUP_DIR/" || {
+    log "ERROR: Failed to upload archive"
+    exit 1
+}
+
+# Clean and extract on target
+log "Removing old home directory for $TARGET_USER on target..."
+ssh -i "$SSH_KEY" "$SSH_USER@$TARGET_IP" "sudo rm -rf /home/$TARGET_USER/*" || {
+    log "WARNING: Could not remove old contents, continuing..."
+}
+
+log "Extracting and migrating data on target..."
+ssh -i "$SSH_KEY" "$SSH_USER@$TARGET_IP" "
+    sudo tar --numeric-owner -xzpf $REMOTE_BACKUP_DIR/$ARCHIVE_NAME -C /home &&
+    sudo cp -a /home/$SOURCE_USER/. /home/$TARGET_USER/ &&
+    sudo chown -R $TARGET_USER:$TARGET_USER /home/$TARGET_USER
+" || {
+    log "ERROR: Extraction or copy failed on target"
+    exit 1
+}
+
+# Verify and log content
+log "Contents of /home/$SOURCE_USER on source:"
+ssh -i "$SSH_KEY" "$SSH_USER@$SOURCE_IP" "ls -la /home/$SOURCE_USER" | tee -a "$LOG_FILE"
+
+log "Contents of /home/$TARGET_USER on target:"
+ssh -i "$SSH_KEY" "$SSH_USER@$TARGET_IP" "ls -la /home/$TARGET_USER" | tee -a "$LOG_FILE"
+
+# Cleanup
+rm -f "$LOCAL_BACKUP_DIR/$ARCHIVE_NAME"
+
+log "✅ Migration complete for $SOURCE_USER ➜ $TARGET_USER"
