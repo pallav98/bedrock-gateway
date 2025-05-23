@@ -2,34 +2,64 @@ name: Workspace Maintenance Pipeline
 
 on:
   workflow_dispatch:
+    inputs:
+      aws_account:
+        description: "Select AWS Account"
+        required: true
+        type: choice
+        options:
+          - account1
+          - account2
+          - account3
 
 jobs:
   rebuild-and-baseline:
-    runs-on: [self-hosted]
+    runs-on: ${{ matrix.runner }}
     defaults:
       run:
         working-directory: ./rebuild/ubuntu/
+
+    strategy:
+      matrix:
+        include:
+          - account: account1
+            runner: account1-runner
+            input_file: data/account1_workspaces.csv
+          - account: account2
+            runner: account2-runner
+            input_file: data/account2_workspaces.csv
+          - account: account3
+            runner: account3-runner
+            input_file: data/account3_workspaces.csv
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
+      - name: Set Input File Path
+        if: ${{ matrix.account == github.event.inputs.aws_account }}
+        run: echo "Using input file: ${{ matrix.input_file }}"
+
       - name: Rebuild all Workspaces
-        run: ./scripts/rebuild_all.sh
+        if: ${{ matrix.account == github.event.inputs.aws_account }}
+        run: ./scripts/rebuild_all.sh "${{ matrix.input_file }}"
 
       - name: Wait for Workspaces to Become Available
-        run: ./scripts/wait_for_all_available.sh
+        if: ${{ matrix.account == github.event.inputs.aws_account }}
+        run: ./scripts/wait_for_all_available.sh "${{ matrix.input_file }}"
 
       - name: Run Baseline on all Workspaces
-        run: ./scripts/run_baseline.sh
+        if: ${{ matrix.account == github.event.inputs.aws_account }}
+        run: ./scripts/run_baseline.sh "${{ matrix.input_file }}"
 
-      - name: Set up Python venv and install dependencies
+      - name: Set up Python venv and generate HTML report
+        if: ${{ matrix.account == github.event.inputs.aws_account }}
         run: |
           python3 -m venv .venv
           source .venv/bin/activate
           pip install pandas
           python3 ./scripts/generate_html_report.py
 
-
       - name: Send Email with Report via SNS
+        if: ${{ matrix.account == github.event.inputs.aws_account }}
         run: ./scripts/send_email.sh
