@@ -30,8 +30,9 @@ jobs:
         run: |
           echo "WORKSPACEID,USERNAME" > $INPUT_FILE
           aws workspaces describe-workspaces \
-            --query "Workspaces[?WorkspaceProperties.OperatingSystemName=='UBUNTU'].{ID:WorkspaceId,UserName:UserName}" \
-            --output text \
+          --query "Workspaces[*].[WorkspaceId,UserName,WorkspaceProperties.OperatingSystemName]" \
+          --output text \
+          | grep -i 'UBUNTU' \
           | awk '{ print $1 "," $2 }' >> $INPUT_FILE
           echo "Generated input file from AWS WorkSpaces:"
           cat $INPUT_FILE
