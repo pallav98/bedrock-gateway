@@ -1,1 +1,53 @@
+jobs:
+  rebuild-and-baseline:
+    runs-on: [self-hosted, mcaas-github-runner]
+    defaults:
+      run:
+        working-directory: ./rebuild/ubuntu/
 
+    env:
+      REGION: us-east-1
+      INPUT_FILE: data/mcaas_workspaces.csv
+      SNS_TOPIC_ARN: "arn:aws:sns:us-east-1:882277137783:mcaas-rebuild-ws"
+      USE_DYNAMIC_INPUT: "true"
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Make scripts executable
+        run: chmod +x ./scripts/*.sh
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_MCAAS }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_MCAAS }}
+          aws-region: ${{ env.REGION }}
+
+      - name: Generate input file dynamically (if flag is set)
+        if: env.USE_DYNAMIC_INPUT == 'true'
+        run: |
+          echo "WORKSPACEID,USERNAME" > $INPUT_FILE
+          aws workspaces describe-workspaces \
+            --query "Workspaces[?WorkspaceProperties.OperatingSystemName=='UBUNTU'].{ID:WorkspaceId,UserName:UserName}" \
+            --output text \
+          | awk '{ print $1 "," $2 }' >> $INPUT_FILE
+          echo "Generated input file from AWS WorkSpaces:"
+          cat $INPUT_FILE
+
+      - name: Rebuild all Workspaces
+        run: ./scripts/rebuild.sh "$INPUT_FILE"
+
+      - name: Wait for Workspaces to Become Available
+        run: ./scripts/wait_for_all_available.sh "$INPUT_FILE"
+
+      - name: Set up SSH key and Ansible password
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.WSANSIBLE_PS }}" > ~/.ssh/wsansible_pw
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/wsansible.pem
+          chmod 600 ~/.ssh/wsansible_pw ~/.ssh/wsansible.pem
+
+      - name: vault_password
+        run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ~/.vault_password.txt
