@@ -1,25 +1,14 @@
 # 🧩 Handle Google Chrome installation and report status
-CHROME_STATUS=$(sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "$SSH_USER@$IP" bash -s << 'EOF'
-  set -euo pipefail
+CHROME_STATUS=$(sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "$SSH_USER@$IP" bash -s << EOF
+  echo "$PASSWORD" | sudo -S pkill chrome || true
+  echo "$PASSWORD" | sudo -S rm -f /home/$SSH_USER/.config/google-chrome/Singleton*
 
-  # Kill Chrome if running
-  pkill chrome || true
-
-  # Remove lock files
-  rm -f ~/.config/google-chrome/Singleton*
-
-  # Install Chrome if not already present
-  if ! command -v google-chrome > /dev/null 2>&1; then
+  if ! command -v google-chrome > /dev/null; then
     echo "Chrome not found. Installing..."
-    wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -O /tmp/chrome.deb
-    sudo apt-get update -qq
-    sudo apt-get install -y /tmp/chrome.deb > /dev/null 2>&1 || {
-      echo "FAILED,Chrome install failed"
-      exit 1
-    }
+    wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -O chrome.deb
+    echo "$PASSWORD" | sudo -S dpkg -i chrome.deb || echo "$PASSWORD" | sudo -S apt-get install -f -y
   fi
 
-  # Start Chrome
   nohup google-chrome --no-sandbox --user-data-dir=/tmp/chrome-profile > /tmp/chrome.log 2>&1 &
   sleep 5
 
@@ -31,5 +20,4 @@ CHROME_STATUS=$(sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -i "$SSH_
 EOF
 )
 
-# 📄 Append Chrome result to the same baseline log
 echo "$WORKSPACE_ID,$USERNAME,$IP,CHROME,$CHROME_STATUS" >> "rebuild/ubuntu/$BASELINE_LOG"
