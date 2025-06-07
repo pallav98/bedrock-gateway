@@ -3,7 +3,9 @@ set -euo pipefail
 
 INPUT_FILE="data/workspaces.csv"
 BASELINE_LOG="data/baseline_status.csv"
+PARALLEL_JOBS=3
 
+mkdir -p logs
 echo "workspaceid,username,ip,status,message" > "$BASELINE_LOG"
 
 run_single() {
@@ -19,15 +21,32 @@ run_single() {
   fi
 
   echo "Running baseline on $WORKSPACE_ID ($USERNAME) - $IP"
-  if OUTPUT=$(./run_user.sh -i "wsansible@$IP" -t -v fcs 2>&1); then
+
+  LOG_FILE="logs/${WORKSPACE_ID}_${USERNAME}.log"
+
+  if OUTPUT=$(./run_user.sh -i "wsansible@$IP" -t -v fcs 2>&1 | tee "$LOG_FILE"); then
     echo "$WORKSPACE_ID,$USERNAME,$IP,SUCCESS,Baseline completed" >> "$BASELINE_LOG"
   else
-    echo "$WORKSPACE_ID,$USERNAME,$IP,FAILED,\"$OUTPUT\"" >> "$BASELINE_LOG"
+    echo "$WORKSPACE_ID,$USERNAME,$IP,FAILED,\"$(tail -n 10 "$LOG_FILE" | tr -d '\r\n')\"" >> "$BASELINE_LOG"
   fi
+
+  # Handle Google Chrome after baseline run
+
+  # Check if google-chrome installed
+  if ! command -v google-chrome >/dev/null 2>&1; then
+    echo "google-chrome not found, installing..."
+    sudo apt-get update && sudo apt-get install -y google-chrome-stable
+  fi
+
+  # Kill all google-chrome processes if running
+  pkill -f google-chrome || true
+
+  # Remove Singleton* files in user's chrome config
+  rm -rf /home/"$USERNAME"/.config/google-chrome/Singleton*
 }
 
 export -f run_single
 export BASELINE_LOG
 
 tail -n +2 "$INPUT_FILE" | grep -v '^$' | \
-  parallel -j 3 --colsep ',' run_single {1} {2}
+  parallel -j $PARALLEL_JOBS --colsep ',' run_single {1} {2}
