@@ -1,0 +1,13 @@
+- name: Tap HashiCorp repo
+  become_user: wsansible
+  community.general.homebrew_tap:
+    name: hashicorp/tap
+    state: present
+
+- name: Install Terraform from hashicorp/tap
+  become_user: wsansible
+  community.general.homebrew:
+    name: hashicorp/tap/terraform
+    state: present
+    path: /opt/brew/bin/
+    update_homebrew: true
