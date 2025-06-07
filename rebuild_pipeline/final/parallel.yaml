@@ -3,14 +3,12 @@ set -euo pipefail
 
 INPUT_FILE="data/workspaces.csv"
 BASELINE_LOG="data/baseline_status.csv"
-PARALLEL_JOBS=5
 
-mkdir -p logs
 echo "workspaceid,username,ip,status,message" > "$BASELINE_LOG"
 
-run_baseline() {
-  local WORKSPACE_ID="$1"
-  local USERNAME="$2"
+run_single() {
+  local WORKSPACE_ID=$1
+  local USERNAME=$2
 
   IP=$(aws workspaces describe-workspaces --workspace-ids "$WORKSPACE_ID" \
        --query 'Workspaces[0].IpAddress' --output text 2>/dev/null)
@@ -20,21 +18,16 @@ run_baseline() {
     return
   fi
 
-  echo "[INFO] Running baseline on $WORKSPACE_ID ($USERNAME) - $IP" >&2
-  LOG_FILE="logs/${WORKSPACE_ID}_${USERNAME}.log"
-
+  echo "Running baseline on $WORKSPACE_ID ($USERNAME) - $IP"
   if OUTPUT=$(./run_user.sh -i "wsansible@$IP" -t -v fcs 2>&1); then
-    RECAP=$(echo "$OUTPUT" | grep -A1 'PLAY RECAP' | tail -n1 | tr -d '\r\n')
-    echo "$WORKSPACE_ID,$USERNAME,$IP,SUCCESS,\"$RECAP\"" >> "$BASELINE_LOG"
+    echo "$WORKSPACE_ID,$USERNAME,$IP,SUCCESS,Baseline completed" >> "$BASELINE_LOG"
   else
-    echo "$WORKSPACE_ID,$USERNAME,$IP,FAILED,\"$(echo "$OUTPUT" | tail -n 5 | tr -d '\r\n')\"" >> "$BASELINE_LOG"
+    echo "$WORKSPACE_ID,$USERNAME,$IP,FAILED,\"$OUTPUT\"" >> "$BASELINE_LOG"
   fi
 }
 
-export -f run_baseline
+export -f run_single
 export BASELINE_LOG
 
-# Run in parallel with 5 jobs
 tail -n +2 "$INPUT_FILE" | grep -v '^$' | \
-  parallel -j $PARALLEL_JOBS --colsep ',' --timeout 900 \
-    run_baseline {1} {2}
+  parallel -j 3 --colsep ',' run_single {1} {2}
