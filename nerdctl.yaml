@@ -1,0 +1,45 @@
+---
+- name: Install latest nerdctl from GitHub
+  hosts: all
+  become: yes
+  tasks:
+
+    - name: Get latest nerdctl version
+      shell: |
+        curl -s https://api.github.com/repos/containerd/nerdctl/releases/latest \
+        | grep '"tag_name":' | cut -d'"' -f4
+      register: nerdctl_version
+      changed_when: false
+
+    - name: Download nerdctl tarball
+      get_url:
+        url: "https://github.com/containerd/nerdctl/releases/download/{{ nerdctl_version.stdout }}/nerdctl-{{ nerdctl_version.stdout }}-linux-amd64.tar.gz"
+        dest: "/tmp/nerdctl.tar.gz"
+        mode: '0644'
+
+    - name: Extract nerdctl
+      unarchive:
+        src: /tmp/nerdctl.tar.gz
+        dest: /tmp/
+        remote_src: yes
+
+    - name: Move nerdctl binary to /usr/local/bin using shell
+      shell: |
+        mv /tmp/nerdctl-{{ nerdctl_version.stdout }}-linux-amd64/nerdctl /usr/local/bin/nerdctl && \
+        chmod +x /usr/local/bin/nerdctl
+      args:
+        executable: /bin/bash
+
+    - name: Clean up temp files
+      file:
+        path: /tmp/nerdctl*
+        state: absent
+
+    - name: Verify nerdctl installation
+      command: nerdctl --version
+      register: nerdctl_check
+      changed_when: false
+
+    - name: Display nerdctl version
+      debug:
+        msg: "Installed: {{ nerdctl_check.stdout }}"
