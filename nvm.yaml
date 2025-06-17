@@ -1,0 +1,40 @@
+- name: Ensure curl is installed
+  apt:
+    name: curl
+    state: present
+    update_cache: yes
+
+- name: Get latest NVM version tag from GitHub
+  uri:
+    url: https://api.github.com/repos/nvm-sh/nvm/releases/latest
+    return_content: yes
+  register: nvm_release
+
+- name: Set NVM version
+  set_fact:
+    nvm_version: "{{ nvm_release.json.tag_name }}"
+
+- name: Install NVM
+  become: false
+  shell: |
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/{{ nvm_version }}/install.sh | bash
+  args:
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ nvm_user }}"
+  become_user: "{{ nvm_user }}"
+
+- name: Add NVM to .bashrc
+  lineinfile:
+    path: "/home/{{ nvm_user }}/.bashrc"
+    line: 'export NVM_DIR="$HOME/.nvm"\n[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
+    insertafter: EOF
+    create: yes
+  become_user: "{{ nvm_user }}"
+
+- name: Ensure .nvm directory exists
+  file:
+    path: "/home/{{ nvm_user }}/.nvm"
+    state: directory
+    owner: "{{ nvm_user }}"
+    group: "{{ nvm_user }}"
