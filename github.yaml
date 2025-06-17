@@ -1,0 +1,29 @@
+- name: Get latest saml2aws version from GitHub
+  shell: |
+    curl -s https://api.github.com/repos/Versent/saml2aws/releases/latest \
+    | grep 'tag_name' | cut -d'"' -f4 | cut -d'v' -f2
+  register: saml2aws_version
+  changed_when: false
+
+- name: Download saml2aws tar.gz from GitHub
+  get_url:
+    url: "https://github.com/Versent/saml2aws/releases/download/v{{ saml2aws_version.stdout }}/saml2aws_{{ saml2aws_version.stdout }}_linux_amd64.tar.gz"
+    dest: "/tmp/saml2aws.tar.gz"
+
+- name: Extract saml2aws binary
+  unarchive:
+    src: "/tmp/saml2aws.tar.gz"
+    dest: "/tmp/"
+    remote_src: yes
+
+- name: Move saml2aws to /usr/local/bin
+  become: true
+  copy:
+    src: "/tmp/saml2aws"
+    dest: "/usr/local/bin/saml2aws"
+    mode: '0755'
+
+- name: Check saml2aws version
+  command: saml2aws --version
+  register: saml2aws_installed
+  changed_when: false
