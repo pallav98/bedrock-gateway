@@ -12,14 +12,16 @@
     recurse: no
   register: home_dirs
 
-- name: Clone NVM repo using shell (avoid git module issues)
+- name: Clone NVM repo using shell (skip if already exists)
   ansible.builtin.shell: |
     git clone --depth=1 --branch {{ nvm_version.stdout }} https://github.com/nvm-sh/nvm.git "{{ item.path }}/.nvm"
   args:
     executable: /bin/bash
+    creates: "{{ item.path }}/.nvm"
   become: true
   become_user: "{{ item.path | basename }}"
   loop: "{{ home_dirs.files }}"
+
 
 
 - name: Append NVM environment variables to .bashrc
