@@ -1,40 +1,50 @@
-- name: Ensure curl is installed
-  apt:
-    name: curl
-    state: present
-    update_cache: yes
+- name: Get latest NVM version
+  ansible.builtin.shell: |
+    curl -s https://api.github.com/repos/nvm-sh/nvm/releases/latest \
+    | grep '"tag_name":' | cut -d '"' -f4
+  register: nvm_version
+  changed_when: false
 
-- name: Get latest NVM version tag from GitHub
-  uri:
-    url: https://api.github.com/repos/nvm-sh/nvm/releases/latest
-    return_content: yes
-  register: nvm_release
+- name: Find all non-root user home directories in /home
+  ansible.builtin.find:
+    paths: /home
+    file_type: directory
+    recurse: no
+  register: home_dirs
 
-- name: Set NVM version
-  set_fact:
-    nvm_version: "{{ nvm_release.json.tag_name }}"
+- name: Install and configure NVM for all non-root users
+  become: true
+  loop: "{{ home_dirs.files }}"
+  loop_control:
+    loop_var: user_home
+  tasks:
 
-- name: Install NVM
-  become: false
-  shell: |
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/{{ nvm_version }}/install.sh | bash
-  args:
-    executable: /bin/bash
-  environment:
-    HOME: "/home/{{ nvm_user }}"
-  become_user: "{{ nvm_user }}"
+    - name: Get username from path
+      set_fact:
+        nvm_user: "{{ user_home.path | basename }}"
 
-- name: Add NVM to .bashrc
-  lineinfile:
-    path: "/home/{{ nvm_user }}/.bashrc"
-    line: 'export NVM_DIR="$HOME/.nvm"\n[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
-    insertafter: EOF
-    create: yes
-  become_user: "{{ nvm_user }}"
+    - name: Clone NVM repo into user's home directory
+      become_user: "{{ nvm_user }}"
+      ansible.builtin.git:
+        repo: https://github.com/nvm-sh/nvm.git
+        dest: "/home/{{ nvm_user }}/.nvm"
+        version: "{{ nvm_version.stdout }}"
 
-- name: Ensure .nvm directory exists
-  file:
-    path: "/home/{{ nvm_user }}/.nvm"
-    state: directory
-    owner: "{{ nvm_user }}"
-    group: "{{ nvm_user }}"
+    - name: Add NVM init to .bashrc
+      ansible.builtin.lineinfile:
+        path: "/home/{{ nvm_user }}/.bashrc"
+        line: |
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
+        insertafter: EOF
+        create: yes
+        state: present
+
+    - name: Install latest Node.js for user
+      become_user: "{{ nvm_user }}"
+      ansible.builtin.shell: |
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        nvm install node
+      args:
+        executable: /bin/bash
