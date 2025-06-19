@@ -5,46 +5,40 @@
   register: nvm_version
   changed_when: false
 
-- name: Find all non-root user home directories in /home
+- name: Find user home directories in /home
   ansible.builtin.find:
     paths: /home
     file_type: directory
     recurse: no
   register: home_dirs
 
-- name: Install and configure NVM for all non-root users
+- name: Clone NVM repo for each user
+  ansible.builtin.git:
+    repo: https://github.com/nvm-sh/nvm.git
+    dest: "{{ item.path }}/.nvm"
+    version: "{{ nvm_version.stdout }}"
   become: true
+  become_user: "{{ item.path | basename }}"
   loop: "{{ home_dirs.files }}"
-  loop_control:
-    loop_var: user_home
-  tasks:
 
-    - name: Get username from path
-      set_fact:
-        nvm_user: "{{ user_home.path | basename }}"
+- name: Append NVM environment variables to .bashrc
+  ansible.builtin.lineinfile:
+    path: "{{ item.path }}/.bashrc"
+    line: |
+      export NVM_DIR="$HOME/.nvm"
+      [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    insertafter: EOF
+    create: yes
+    state: present
+  loop: "{{ home_dirs.files }}"
 
-    - name: Clone NVM repo into user's home directory
-      become_user: "{{ nvm_user }}"
-      ansible.builtin.git:
-        repo: https://github.com/nvm-sh/nvm.git
-        dest: "/home/{{ nvm_user }}/.nvm"
-        version: "{{ nvm_version.stdout }}"
-
-    - name: Add NVM init to .bashrc
-      ansible.builtin.lineinfile:
-        path: "/home/{{ nvm_user }}/.bashrc"
-        line: |
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
-        insertafter: EOF
-        create: yes
-        state: present
-
-    - name: Install latest Node.js for user
-      become_user: "{{ nvm_user }}"
-      ansible.builtin.shell: |
-        export NVM_DIR="$HOME/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-        nvm install node
-      args:
-        executable: /bin/bash
+- name: Install latest Node.js using NVM
+  ansible.builtin.shell: |
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    nvm install node
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ item.path | basename }}"
+  loop: "{{ home_dirs.files }}"
