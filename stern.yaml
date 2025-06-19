@@ -1,0 +1,27 @@
+- name: Get latest Stern version
+  ansible.builtin.shell: |
+    curl -s https://api.github.com/repos/stern/stern/releases/latest | grep tag_name | cut -d '"' -f4
+  register: stern_version
+  changed_when: false
+
+- name: Download stern binary (Linux AMD64)
+  ansible.builtin.get_url:
+    url: "https://github.com/stern/stern/releases/download/{{ stern_version.stdout }}/stern_{{ stern_version.stdout | regex_replace('^v', '') }}_linux_amd64.tar.gz"
+    dest: /tmp/stern.tar.gz
+    mode: '0644'
+
+- name: Extract stern binary
+  ansible.builtin.unarchive:
+    src: /tmp/stern.tar.gz
+    dest: /usr/local/bin/
+    remote_src: yes
+    mode: '0755'
+  become: true
+
+- name: Ensure stern is executable
+  ansible.builtin.file:
+    path: /usr/local/bin/stern
+    mode: '0755'
+    owner: root
+    group: root
+  become: true
